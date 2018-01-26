@@ -1,0 +1,71 @@
+#include <ms1_grasping/pid.h>
+
+PID::PID(Eigen::Vector3d P, Eigen::Vector3d I, Eigen::Vector3d D, double delta_time=1.0/30.0, double Isat=0.004)
+{
+
+		Kp=P;
+		Ki=I;
+		Kd=D;
+		
+		dt_p=delta_time;
+		
+
+		Derivator  << 0.0,0.0,0.0;
+		Integrator << 0.0,0.0,0.0;
+		
+		Integrator_max << Isat, Isat, Isat;
+		Integrator_min << -Isat, -Isat, -Isat;
+
+		error << 0.0,0.0,0.0;
+		
+		for (int i=0; i<3 ; i++)
+		{
+				if (Ki[i] == 0.0) 
+				{
+						Integrator_max[i] = 0.0;
+						Integrator_min[i] = 0.0;
+				}
+				
+				else
+				{
+						Integrator_max[i]=Integrator_max[i]/Ki[i] ;
+						Integrator_min[i]=Integrator_min[i]/Ki[i] ;
+				}
+
+		}
+}
+
+
+Eigen::Vector3d PID::update(Eigen::Vector3d er)
+{
+		/*
+		* Calculate PID output value for given reference input and feedback
+		*/
+		error = er;
+
+		Vector3d P_value = Kp.array() * error.array();
+		Vector3d D_value = Kd.array() * ( error.array() - Derivator.array())/dt_p;
+		
+		Derivator = error;
+
+		Integrator = Integrator + error;
+
+		for (int i = 0;i<3;i++)
+		{
+			if(Integrator[i] > Integrator_max[i])
+			{
+					Integrator[i] = Integrator_max[i]; // /(Ki*dt)
+			}
+			else if(Integrator[i] < Integrator_min[i])
+			{
+					Integrator[i] = Integrator_min[i];///(Ki*dt)
+			}
+		}
+
+		Vector3d I_value = Integrator.array() * Ki.array() * dt_p;
+
+		Vector3d PID = P_value + I_value + D_value;
+
+		return PID;
+
+}

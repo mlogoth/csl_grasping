@@ -1,0 +1,192 @@
+#include <ms1_grasping/lowlevelArmTiagoControl.h>
+#include <ros/ros.h>
+#include <ros/console.h>
+#include "trajectory_msgs/JointTrajectoryPoint.h"
+#include "trajectory_msgs/JointTrajectory.h"
+#include <Eigen/QR> 
+ArmControl::ArmControl(ros::NodeHandle n)
+{
+		std::cout<<"Low Level Arm Control Initialization"<<std::endl;
+		
+		
+		// arm joint trajectory controller 
+		pub_ = n.advertise<trajectory_msgs::JointTrajectory>("arm_controller/command", 1000);
+		
+		
+		// Gains Vector of ee controller
+		K.resize(6);
+		K << 1.0 , 1.0, 1.0, 1.0, 1.0, 1.0;
+		
+		/* 
+		 * Define Joint limitis
+		 * Rows = the i-th joint
+		 * Columns = [min,max]
+		 */
+		q_lim.resize(7,2); 
+		q_lim <<  0.0 , 157.5 ,-90.0 , 62.5 ,-202.5, 90.0,-22.5 , 135.0 ,-120.0,120.0,-90.0 , 90.0,-120.0,120.0;
+
+		q_lim = q_lim * M_PI/180.0;
+		
+		
+		G1 =  Eigen::MatrixXd::Zero(7, 7);
+		G2 = Eigen::MatrixXd::Zero(7,6);
+		G4 = Eigen::MatrixXd::Zero(7,6);
+		G3.resize(7);
+		G3 << 0.0 ,0.0 ,0.0 ,0.0 ,0.0 ,0.0, 0.0;
+		
+		
+		qvel.resize(7);
+		qvel << 0.0 ,0.0 ,0.0 ,0.0 ,0.0 ,0.0, 0.0;
+		
+		
+		c.resize(7);
+		c << 0.0 ,0.0 ,0.0 ,0.0 ,0.0 ,0.0, 0.0;
+
+}
+
+
+
+Eigen::Matrix<double, 6, Eigen::Dynamic> ArmControl::useJac(Eigen::Matrix<double, 6, Eigen::Dynamic> Jac, int from_joint, int to_joint)
+{
+		// Jacobian that will be used
+		Eigen::MatrixXd J(6,to_joint-from_joint+1);
+		int j = 0;
+		for (unsigned int k = from_joint; k<(unsigned int)(to_joint+1); k++)
+		{
+				// get the desired columns
+				J.col(j) = Jac.col(k);
+		}
+		
+		std::cout<< "Use Jacobian:\n"<<std::endl;
+		cout<< J <<endl;
+
+		
+		
+		return J;
+}
+
+
+
+// Computes Joint Velocities taking into account 
+// Joint Limits and Singularity Avoidance
+Eigen::VectorXd ArmControl::JLAArmControl(Eigen::Matrix<double, 6, Eigen::Dynamic> J, Eigen::VectorXd ed, Eigen::VectorXd q)
+{
+		/* Important */
+		ed = -ed;
+		
+		Eigen::VectorXd v(7), Ka(7);
+		v << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+		// Weight Matrix
+		Ka << 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0;
+		
+		Eigen::MatrixXd I(7,7), J_tran(7,6), J_pinv(7,6), L(7,7);
+		I = MatrixXd::Identity(7, 7);
+		
+		//gain for singularity avoidance
+		double lamda = 0.3;
+		// Get Transpose Jacobian
+		J_tran = J.transpose();
+		
+		//compute pseudo inverse
+		L=J*J_tran;
+		L = L.inverse();
+		J_pinv = J_tran*L;
+
+		// Joint Range
+		Eigen::MatrixXd Dq(7,1);
+		Dq = q_lim.col(0)-q_lim.col(1);
+
+		
+		// center of Joint Range
+		Eigen::MatrixXd qc(7,1);
+		qc = Dq/2.0;
+
+		//Generate Cost Function for Joint Limits Avoidance
+		Eigen::VectorXd  m(q.size());//.array().colwise();
+		
+		for (unsigned int i=0;i<(unsigned int)m.size();i++)
+		{
+			m[i] = Ka[i]*(q[i] - qc(i,0))/Dq(i,0);
+		}
+
+		//cost function
+		double phi = m.lpNorm<8>();
+		//cout<<"phi : \n"<<phi<<endl;
+		double divisor = pow(phi,6);
+		//cout<<"divisor : \n"<<divisor<<endl;
+		for (unsigned int k=0; k<7; k++)
+		{
+			v[k] = -m[k]*(pow(abs(m[k]), 5.0))/divisor;
+		}
+		G1 = J_tran*J + (lamda*lamda)*I;
+		G2 = G1.inverse()*J_tran;
+		VectorXd c = K.array()*ed.array();
+		G3 = G2*c;
+		G4 = J_pinv * J;
+		qvel = G3 + (I-G4)*v;
+		return qvel;
+		
+}
+
+
+
+
+
+
+
+void ArmControl::SendVelocityCommands(Eigen::VectorXd qvel, Eigen::VectorXd qcur, std::vector<std::string> qnames, double dt)
+{
+		Eigen::VectorXd qpos = qcur + qvel*dt;
+		//std::vector<std::string> jnames = qnames;
+		ArmControl::PubPositionCommands(qpos, qnames);
+
+}
+
+
+
+void ArmControl::PubPositionCommands(Eigen::VectorXd qdess, std::vector<std::string> qnames)
+{
+
+		trajectory_msgs::JointTrajectory msg;
+
+		msg.joint_names.push_back(qnames[0]);
+		msg.joint_names.push_back(qnames[1]);
+		msg.joint_names.push_back(qnames[2]);
+		msg.joint_names.push_back(qnames[3]);
+		msg.joint_names.push_back(qnames[4]);
+		msg.joint_names.push_back(qnames[5]);
+		msg.joint_names.push_back(qnames[6]);
+
+		msg.points.resize(1); 
+
+
+		for (unsigned int k=0; k<7;k++)
+		{
+				double joint = round(qdess[k]*1800.0/M_PI);
+
+				qdess[k] = joint*M_PI/1800.0;
+		}
+
+			msg.points[0].positions.resize(7);
+			msg.points[0].velocities.resize(7);
+			msg.points[0].accelerations.resize(7);
+			msg.points[0].effort.resize(7);
+				
+		
+		
+		cout<<"qd  : \n"<<qdess <<endl;
+		for (int k=0; k<7;k++)
+		{
+				
+				msg.points[0].positions[k] = qdess[k];
+				msg.points[0].velocities[k] = 0.0;
+				msg.points[0].accelerations[k] = 0.0;
+				msg.points[0].effort[k] = 0.0;
+				
+		}
+		msg.points[0].time_from_start = ros::Duration(0.5);
+		
+
+		pub_.publish(msg);
+}
+

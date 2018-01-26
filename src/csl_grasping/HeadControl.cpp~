@@ -1,0 +1,41 @@
+#include <ms1_grasping/HeadControl.h>
+#include <ros/ros.h>
+#include <ros/console.h>
+#include "trajectory_msgs/JointTrajectoryPoint.h"
+#include "trajectory_msgs/JointTrajectory.h"
+#include <Eigen/QR> 
+HeadControl::HeadControl(ros::NodeHandle n)
+{
+	ROS_INFO("Initialization Of Head Controller");
+	// gripper joint trajectory controller 
+	pub_ = n.advertise<trajectory_msgs::JointTrajectory>("head_controller/command", 1000);
+}
+
+
+int HeadControl::move(Eigen::VectorXd qdess)
+{
+	trajectory_msgs::JointTrajectory msg;
+	msg.joint_names.push_back("head_1_joint");
+	msg.joint_names.push_back("head_2_joint");
+
+	msg.points.resize(1); 
+	msg.points[0].positions.resize(2);
+	msg.points[0].velocities.resize(2);
+	msg.points[0].accelerations.resize(2);
+	msg.points[0].effort.resize(2);
+
+	for (int k=0; k<2;k++)
+	{
+			
+			msg.points[0].positions[k] = qdess[k];
+			msg.points[0].velocities[k] = 0.0;
+			msg.points[0].accelerations[k] = 0.0;
+			msg.points[0].effort[k] = 0.0;
+			
+			
+	}
+	msg.points[0].time_from_start = ros::Duration(0.5);
+	pub_.publish(msg);
+	return 1;	
+}
+

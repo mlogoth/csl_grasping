@@ -1,0 +1,307 @@
+#include <ms1_grasping/ArmMoveItPlanner.h>
+
+
+ArmPlanner::ArmPlanner(ros::NodeHandle n_, std::string obj_name)
+{
+		cout<<"Initialization of Arm MoveIt Planner.. " <<endl;
+
+		// Subscribers and Publishers
+		sub_action =  n_.subscribe("/action/id", 1,&ArmPlanner::ReadAction, this);
+		pub_action = n_.advertise<ms1_msgs::ActionSeq>("/action/result", 1000);
+		
+		sub_ = n_.subscribe("/objects", 1,&ArmPlanner::callBack, this);
+		
+		
+		group = "arm_torso";
+		Planner = "SBLkConfigDefault";
+		RefFrame = "robot_0/base_footprint";
+		
+		action_info = "WAITING";
+		action_res = "SUCCEED";
+		
+		//moveit::planning_interface::MoveGroup group_arm(group);
+
+}
+
+
+void ArmPlanner::callBack(const ms1_msgs::Objects data)
+{
+		
+		int object_num = 0;
+		
+		// object id
+		std::string object_id = data.objects[0].id;
+		
+		//objec type
+		std::string object_type = data.objects[0].type;
+		
+		//object position
+		p_obj[0] = data.objects[0].pose.position.x;
+		p_obj[1] = data.objects[0].pose.position.y;
+		p_obj[2] = data.objects[0].pose.position.z;
+		
+		//object position
+		q_obj.x() = data.objects[0].pose.orientation.x;
+		q_obj.y() = data.objects[0].pose.orientation.y;
+		q_obj.z() = data.objects[0].pose.orientation.z;
+		q_obj.w() = data.objects[0].pose.orientation.w;
+		
+		//object dimensions
+		Vector3d object_dimensions;
+		
+		object_dimensions << data.objects[0].dimensions[0], data.objects[0].dimensions[1], data.objects[0].dimensions[2];
+		
+		cout<<"-----  OBJECT READ --------"<<endl;
+		cout<<"ID: "<<object_id<<endl;
+		cout<<"TYPE: "<<object_type<<endl;
+  	cout<<"Position: "<<p_obj.x() << " " <<p_obj.y()<< " "<< p_obj.z()<<endl;
+  	cout<<"Quaternion: "<<q_obj.x() << " " <<q_obj.y()<<" "<<q_obj.z() << " " <<q_obj.w()<<endl;
+		/*
+		geometry_msgs::Pose obj_pose;
+		//geometry_msgs::PoseStamped obj_stmp,obj_b;
+		
+		obj_pose = data.pose.pose;
+		
+		//obj_stmp.header.frame_id = data.header.frame_id;
+		//obj_stmp.header.stamp =  ros::Time();
+		//obj_stmp.pose = obj_pose;
+		cout<<"CALL BACK!!"<<endl;
+  	
+  	
+  	q_obj.x() = obj_pose.orientation.x; 
+  	q_obj.y() = obj_pose.orientation.y;
+  	q_obj.z() = obj_pose.orientation.z;
+  	q_obj.w() = obj_pose.orientation.w;
+  	
+  	
+  	p_obj = Vector3d(obj_pose.position.x,obj_pose.position.y,obj_pose.position.z);
+  	//Vector3d euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
+  	
+  	cout<<"Position: "<<p_obj.x() << " " <<p_obj.y()<< " "<< p_obj.z()<<endl;
+  	cout<<"Quaternion: "<<q_obj.x() << " " <<q_obj.y()<<" "<<q_obj.z() << " " <<q_obj.w()<<endl;
+  	
+  	listener.waitForTransform(data.header.frame_id, "/base_footprint", ros::Time(0), ros::Duration(1.0));
+  	
+  	//transformation between base_footprint and object
+  	try{
+  		//listener.lookupTransform("/robot_0/base_footprint", "robot_0/xtion_rgb_optical_frame",ros::Time(0), transform);
+  		listener.transformPose("/robot_0/base_footprint", obj_stmp, obj_b);
+				}
+		catch (tf::TransformException ex){
+  		ROS_ERROR("%s",ex.what());
+  		std::cout<<"ERROR:"<<ex.what()<<endl;
+  		ros::Duration(1.0).sleep();
+			}
+			*/
+
+}
+
+
+
+
+
+
+void ArmPlanner::ReadAction(const ms1_msgs::ActionSeq msg)
+{
+		std::cout<<"Action ID: "<<msg.data.data<<std::endl;
+		action_info = msg.data.data;
+}
+
+
+void ArmPlanner::UpdateStatus(std::string data)
+{
+		ms1_msgs::ActionSeq msg;
+
+		//msg.header.stamp = ros::Time::now();
+		//msg.header.frame_id = "robot_0";
+
+		//std_msgs::String str;
+		//str.data = data;
+		msg.data.data = data;
+
+		pub_action.publish(msg);
+
+}
+
+
+Vector3d ArmPlanner::getObjectPosition()
+{
+	cout<<"\nReturn object Position: \n";
+	cout<<"Position: "<<p_obj.x() << " " <<p_obj.y()<< " "<< p_obj.z()<<endl;
+	return p_obj;
+
+}
+
+Quaterniond ArmPlanner::getObjectOrientation()
+{
+	cout<<"\nReturn object Orientation: \n";
+	cout<<"Quaternion: "<<q_obj.x() << " " <<q_obj.y()<<" "<<q_obj.z() << " " <<q_obj.w()<<endl;
+	return q_obj;
+}
+
+std::string ArmPlanner::getActionInfo()
+{
+	cout<<"\nACTION INFO:  " << action_info <<endl;
+	return action_info;
+}
+
+
+int ArmPlanner::plan(string MoveType) 
+{	
+  	
+  	moveit::planning_interface::MoveGroup group_arm(group);
+  	// set the Desired planner
+  	group_arm.setPlannerId(Planner);
+  
+  	// set the reference Frame
+  	group_arm.setPoseReferenceFrame(RefFrame);
+  
+  	// current pose
+  	geometry_msgs::PoseStamped current_pose = group_arm.getCurrentPose();
+  
+  
+  	px = current_pose.pose.position.x;
+  	py = current_pose.pose.position.y;
+  	pz = current_pose.pose.position.z;
+  
+  	rx = current_pose.pose.orientation.x;
+  	ry = current_pose.pose.orientation.y;
+  	rz = current_pose.pose.orientation.z;
+  	rw = current_pose.pose.orientation.w;
+  
+  	//print current pose
+		std::printf("------------ EE [%s] Current Pose --------------\n",current_pose.header.frame_id.c_str());
+		std::printf("Position:     x: %.4f y: %.4f z: %.4f\n",px,py,pz);
+		std::printf("Orieantation: x: %.4f y: %.4f z: %.4f w: %.4f \n",rx,ry,rz,rw);
+		
+		//print Desired EE Pose
+		std::printf("  -------  Desired EE Pose wrt [%s] --------  \n",ee_des.header.frame_id.c_str());
+		std::printf("Position:     x:%.4f  y:%.4f  z:%.4f        \n",ee_des.pose.position.x,ee_des.pose.position.y,ee_des.pose.position.z);
+		std::printf("Orientation:  x:%.4f  y:%.4f  z:%.4f  w:%.4f\n", ee_des.pose.orientation.x, ee_des.pose.orientation.y, ee_des.pose.orientation.z, ee_des.pose.orientation.w);
+
+		//clear previous des pose
+		group_arm.clearPoseTarget();
+		//set desired ee pose
+		group_arm.setPoseTarget(ee_des);
+
+		ROS_INFO_STREAM("\nPlanning to move " << group_arm.getEndEffectorLink() << " to a target pose expressed in " << group_arm.getPlanningFrame());
+		//Start State is the Current State
+		group_arm.setStartStateToCurrentState();
+		//Maximum velocity scaling factor
+		group_arm.setMaxVelocityScalingFactor(1.0);
+		
+	
+		// planning interface
+		moveit::planning_interface::MoveGroup::Plan my_plan;
+		
+		double plan_time =10.0;
+		//set maximum time to find a plan
+		group_arm.setPlanningTime(10.0);
+		ROS_INFO_STREAM("\nPlanning Time Set To " << plan_time << " plan_time\n");
+		bool success = group_arm.plan(my_plan);
+		//bool success = true;
+		if ( !success ) 
+		{
+				// plan not found
+				std::cout<<"!!!  No Plan Found  !!!\n";
+				std::cout<<"Clear Desired EE Pose...\n";
+				group_arm.clearPoseTarget();
+				return 0;
+		}
+	
+		else 
+		{
+				ROS_INFO_STREAM("Plan found in " << my_plan.planning_time_ << " seconds");
+
+				// Execute the plan
+				group_arm.allowReplanning(false);
+	  		
+				ROS_INFO("--- MOVE ---"); 
+				/*
+				* Plan and execute a trajectory that takes the group of joints declared in the constructor to the specified target. 
+				* This call is not blocking (does not wait for the execution of the trajectory to complete). 
+				*/
+				if (MoveType=="async") 
+				{
+						group_arm.asyncMove();
+						return 1;
+				}
+				
+				
+				else if (MoveType=="sync")
+				{
+						group_arm.move();
+						return 1;
+				}
+				else
+				{
+						std::cout<<"Select correct type of move()..."<<endl;
+						return 2;
+				}
+		}
+}
+
+
+
+
+/*
+* Set Desired Pose
+*/
+void ArmPlanner::setDesiredPose(double x , double y , double z , double roll =0.0, double pitch=0.0, double yaw=0.0 )
+{
+		ee_des.header.frame_id = "robot_0/base_footprint";	
+
+		// define position
+		ee_des.pose.position.x = x;
+		ee_des.pose.position.y = y;
+		ee_des.pose.position.z = z;
+
+		//compute quaternion using euler
+		Matrix3f Ro_eed = ArmPlanner::Rot3DMatrix(roll,pitch,yaw);
+		Quaternionf q2(Ro_eed);
+
+		ee_des.pose.orientation.x = q2.x();
+		ee_des.pose.orientation.y = q2.y();
+		ee_des.pose.orientation.z = q2.z();
+		ee_des.pose.orientation.w = q2.w();
+}
+
+
+
+
+/*
+ * Rotation Matrix Computation using roll,pitch,yaw angles
+ */
+Matrix<float, 3, 3> ArmPlanner::Rot3DMatrix(float roll,float pitch, float yaw) 
+{
+
+	Matrix3f matRZ,matRY,matRX;
+
+	matRZ << 	cos(yaw), -sin(yaw), 0.0f,
+       			sin(yaw), cos(yaw), 0.0f,  //z
+       			0.0f, 0.0f, 1.0f;
+
+	matRY << cos(pitch), 0.0f, sin(pitch),
+    				0.0f, 1.0f, 0.0f,   // X
+    			-sin(pitch), 0.0f, cos(pitch);
+
+	matRX << 1.0f, 0.0f, 0.0f,
+    			0.0f, cos(roll), -sin(roll),   // Y
+    			0.0f, sin(roll), cos(roll);
+
+	return matRZ*matRY*matRX;
+}
+
+
+
+
+
+// get the name of the group of Joints
+void ArmPlanner::setGroupName(string name="arm_torso") {group = name;}
+
+// get PlannerID
+void ArmPlanner::setPlannerID(string name="SBLkConfigDefault") {Planner = name;}
+
+// get Reference Frame 
+void ArmPlanner::setReferenceFrame(string name="robot_0/base_footprint") {RefFrame = name;}
+

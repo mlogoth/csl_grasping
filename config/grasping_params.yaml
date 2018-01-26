@@ -1,0 +1,10 @@
+grasping:
+    object:
+        point_cloud_topic: /csl_tracking_object_cloud
+        pose_topic: /csl_tracking_object_pose
+    kinect_frame: /kinect_rgb_optical_frame
+    gripper:
+        height: 0.04
+        lenght: 0.06
+        open: 0.05
+    loops: 30

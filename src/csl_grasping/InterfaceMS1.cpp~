@@ -1,0 +1,135 @@
+#include <ms1_grasping/InterfaceMS1.h>
+
+
+InterfaceMS1::InterfaceMS1(ros::NodeHandle n_)
+{
+		// Subscribers and Publishers
+		sub_action =  n_.subscribe("action/id", 1,&InterfaceMS1::ReadAction, this);
+		pub_action = n_.advertise<ms1_msgs::ActionSeq>("action/result", 1000);
+		sub_ = n_.subscribe("objects", 1,&InterfaceMS1::callBack, this);
+		
+		action_info = "";
+		action_res = "";
+		
+		object_id = "";
+		object_type = "";
+		
+		object_num = 0;
+		
+		p_obj << 0.0, 0.0, 0.0;
+		p_g << 0.0, 0.0, 0.0;
+
+}
+
+
+InterfaceMS1::~InterfaceMS1()
+{
+	cout << "Interface MS1 Object is being deleted" << endl;
+}
+
+
+void InterfaceMS1::callBack(const ms1_msgs::Objects data)
+{
+		
+	// Set Num Of Detected Objects
+	object_num = data.objects_num;
+	
+	if (data.objects_num == 1)
+	{
+		// object id
+		object_id = data.objects[0].id;
+	
+		//objec type
+		object_type = data.objects[0].type;
+	
+		//object position
+		p_obj[0] = data.objects[0].pose.position.x;
+		p_obj[1] = data.objects[0].pose.position.y;
+		p_obj[2] = data.objects[0].pose.position.z;
+	
+		//object position
+		q_obj.x() = data.objects[0].pose.orientation.x;
+		q_obj.y() = data.objects[0].pose.orientation.y;
+		q_obj.z() = data.objects[0].pose.orientation.z;
+		q_obj.w() = data.objects[0].pose.orientation.w;
+		
+		
+		// Grasping Point
+		p_g[0] = data.objects[0].grasping_point.pose.position.x;
+		p_g[1] = data.objects[0].grasping_point.pose.position.y;
+		p_g[2] = data.objects[0].grasping_point.pose.position.z;
+		
+		
+		q_g.x() = data.objects[0].grasping_point.pose.orientation.x;
+		q_g.y() = data.objects[0].grasping_point.pose.orientation.y;
+		q_g.z() = data.objects[0].grasping_point.pose.orientation.z;
+		q_g.w() = data.objects[0].grasping_point.pose.orientation.w;
+	
+	
+		//object dimensions
+		Vector3d object_dimensions;
+	
+		object_dimensions << data.objects[0].dimensions[0], data.objects[0].dimensions[1], data.objects[0].dimensions[2];
+	}
+		
+}
+
+
+
+
+
+/* Read Actions sent by the Planner */
+void InterfaceMS1::ReadAction(const ms1_msgs::ActionSeq msg)
+{
+	action_info = msg.data;
+}
+
+/* Update Algorithm Status To the Planner */
+void InterfaceMS1::UpdateStatus(std::string data)
+{
+	ms1_msgs::ActionSeq msg;
+	msg.stamp = ros::Time::now();
+	msg.data = data;
+	pub_action.publish(msg);
+
+}
+
+
+/* Get Object Position */
+Vector3d InterfaceMS1::getObjectPosition()
+{
+	return p_obj;
+}
+
+/* Get Object Orientation */
+Quaterniond InterfaceMS1::getObjectOrientation()
+{
+	return q_obj;
+}
+
+
+/* Get Action Readed From The Planner */
+std::string InterfaceMS1::getActionId()
+{
+	return action_info;
+}
+
+/* Get Grasping Point Position */
+Vector3d InterfaceMS1::getPointPosition()
+{
+	return p_g;
+}
+
+/* Get Grasping Point Orientation */
+Quaterniond InterfaceMS1::getPointOrientation()
+{
+	return q_g;
+}
+
+/* Get Number Of Detected Objects */
+int InterfaceMS1::getObjectNum()
+{
+	return object_num;
+}
+
+

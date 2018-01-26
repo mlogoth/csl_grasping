@@ -1,0 +1,184 @@
+#include <ms1_grasping/ArmMoveItPlanner.h>
+
+
+ArmPlanner::ArmPlanner(ros::NodeHandle n_)
+{
+		cout<<"Initialization of Arm MoveIt Planner.. " <<endl;
+
+		group = "arm_torso";
+		Planner = "SBLkConfigDefault";
+		RefFrame = "base_footprint";
+
+
+}
+
+
+ArmPlanner::~ArmPlanner()
+{
+		cout << "ARM Planner Object is being deleted" << endl;
+}
+
+
+
+int ArmPlanner::plan(string MoveType) 
+{	
+  	
+  	moveit::planning_interface::MoveGroup group_arm(group);
+  	// set the Desired planner
+  	group_arm.setPlannerId(Planner);
+  
+  	// set the reference Frame
+  	group_arm.setPoseReferenceFrame(RefFrame);
+  
+  	// current pose
+  	geometry_msgs::PoseStamped current_pose = group_arm.getCurrentPose();
+  
+  
+  	px = current_pose.pose.position.x;
+  	py = current_pose.pose.position.y;
+  	pz = current_pose.pose.position.z;
+  
+  	rx = current_pose.pose.orientation.x;
+  	ry = current_pose.pose.orientation.y;
+  	rz = current_pose.pose.orientation.z;
+  	rw = current_pose.pose.orientation.w;
+  
+  	//print current pose
+	std::printf("------------ EE [%s] Current Pose --------------\n",current_pose.header.frame_id.c_str());
+	std::printf("Position:     x: %.4f y: %.4f z: %.4f\n",px,py,pz);
+	std::printf("Orieantation: x: %.4f y: %.4f z: %.4f w: %.4f \n",rx,ry,rz,rw);
+	
+	//print Desired EE Pose
+	std::printf("  -------  Desired EE Pose wrt [%s] --------  \n",ee_des.header.frame_id.c_str());
+	std::printf("Position:     x:%.4f  y:%.4f  z:%.4f        \n",ee_des.pose.position.x,ee_des.pose.position.y,ee_des.pose.position.z);
+	std::printf("Orientation:  x:%.4f  y:%.4f  z:%.4f  w:%.4f\n", ee_des.pose.orientation.x, ee_des.pose.orientation.y, ee_des.pose.orientation.z, ee_des.pose.orientation.w);
+
+	//clear previous des pose
+	group_arm.clearPoseTarget();
+	//set desired ee pose
+	group_arm.setPoseTarget(ee_des);
+
+	ROS_INFO_STREAM("\nPlanning to move " << group_arm.getEndEffectorLink() << " to a target pose expressed in " << group_arm.getPlanningFrame());
+	//Start State is the Current State
+	group_arm.setStartStateToCurrentState();
+	//Maximum velocity scaling factor
+	group_arm.setMaxVelocityScalingFactor(1.0);
+	
+
+	// planning interface
+	moveit::planning_interface::MoveGroup::Plan my_plan;
+	
+	double plan_time = 10.0;
+	//set maximum time to find a plan
+	group_arm.setPlanningTime(10.0);
+	
+	//group_arm.setNumPlanningAttempts(5);
+	ROS_INFO_STREAM("\nPlanning Time Set To " << plan_time << " plan_time\n");
+	bool success = group_arm.plan(my_plan);
+	//bool success = true;
+	if ( !success ) 
+	{
+			// plan not found
+			ROS_INFO("!!!  No Plan Found  !!!");
+			ROS_INFO("Clear Desired EE Pose");
+			group_arm.clearPoseTarget();
+			return 0;
+	}
+
+	else 
+	{
+			ROS_INFO_STREAM("Plan found in " << my_plan.planning_time_ << " seconds");
+
+			// Execute the plan
+			group_arm.allowReplanning(true);
+  		
+			ROS_INFO("--- MOVE ---"); 
+			/*
+			* Plan and execute a trajectory that takes the group of joints declared in the constructor to the specified target. 
+			* This call is not blocking (does not wait for the execution of the trajectory to complete). 
+			*/
+			if (MoveType=="async") 
+			{
+					group_arm.asyncMove();
+					return 1;
+			}
+			
+			
+			else if (MoveType=="sync")
+			{
+					group_arm.move();
+					//group_arm.stop();
+					return 1;
+			}
+			else
+			{
+					std::cout<<"Select correct type of move()..."<<endl;
+					return 2;
+			}
+	}
+}
+
+
+
+
+/*
+* Set Desired Pose
+*/
+void ArmPlanner::setDesiredPose(double x , double y , double z , double roll =0.0, double pitch=0.0, double yaw=0.0 )
+{
+		ee_des.header.frame_id = "base_footprint";	
+
+		// define position
+		ee_des.pose.position.x = x;
+		ee_des.pose.position.y = y;
+		ee_des.pose.position.z = z;
+
+		//compute quaternion using euler
+		Matrix3f Ro_eed = ArmPlanner::Rot3DMatrix(roll,pitch,yaw);
+		Quaternionf q2(Ro_eed);
+
+		ee_des.pose.orientation.x = q2.x();
+		ee_des.pose.orientation.y = q2.y();
+		ee_des.pose.orientation.z = q2.z();
+		ee_des.pose.orientation.w = q2.w();
+}
+
+
+
+
+/*
+ * Rotation Matrix Computation using roll,pitch,yaw angles
+ */
+Matrix<float, 3, 3> ArmPlanner::Rot3DMatrix(float roll,float pitch, float yaw) 
+{
+
+	Matrix3f matRZ,matRY,matRX;
+
+	matRZ << 	cos(yaw), -sin(yaw), 0.0f,
+       			sin(yaw), cos(yaw), 0.0f,  //z
+       			0.0f, 0.0f, 1.0f;
+
+	matRY << cos(pitch), 0.0f, sin(pitch),
+    				0.0f, 1.0f, 0.0f,   // X
+    			-sin(pitch), 0.0f, cos(pitch);
+
+	matRX << 1.0f, 0.0f, 0.0f,
+    			0.0f, cos(roll), -sin(roll),   // Y
+    			0.0f, sin(roll), cos(roll);
+
+	return matRZ*matRY*matRX;
+}
+
+
+
+
+
+// get the name of the group of Joints
+void ArmPlanner::setGroupName(string name="arm") {group = name;}
+
+// get PlannerID
+void ArmPlanner::setPlannerID(string name="SBLkConfigDefault") {Planner = name;}
+
+// get Reference Frame 
+void ArmPlanner::setReferenceFrame(string name="base_footprint") {RefFrame = name;}
+

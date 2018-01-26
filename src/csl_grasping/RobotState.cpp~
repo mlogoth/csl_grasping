@@ -1,0 +1,58 @@
+#include <ros/ros.h>
+#include <ros/console.h>
+#include <iostream>
+#include <stdio.h>
+
+#include "sensor_msgs/JointState.h"
+
+#include <ms1_grasping/RobotState.h>
+
+
+RobotState::RobotState (ros::NodeHandle n_)
+		{
+			nhd = n_;
+			
+			std::cout<<"Initialize Robot State Class...\n"<<std::endl;
+			
+			/* Initialize Subscriber*/
+			sub_state = nhd.subscribe("joint_states", 10, &RobotState::getJointState, this);
+			
+			/* Initialize Variables */
+			for(int i = 0;i < 8;i++) {
+				q_pos[i] = 0.0;
+				q_name[i] = " ";
+				q_vel[i] = 0.0;
+				q_eff[i] = 0.0;
+			}
+			
+			jp_head[0] = 0.0;
+			jp_head[1] = 0.0;
+			
+			std::cout<<"Initialized...OK \n"<<std::endl;
+		}
+		
+// Read Joint States
+void RobotState::getJointState(const sensor_msgs::JointState data) 
+		{
+				
+				std::cout<<"************************\n";
+				std::cout<<"Reading Joint States\n";
+				// Torso Joint Values
+				q_name[0] = data.name[11];
+				q_pos[0] = data.position[11];
+				q_vel[0] = data.velocity[11];
+				q_eff[0] = data.effort[11];
+				
+				// Head Joint Values
+				jp_head[0] = data.position[9];
+				jp_head[1] = data.position[10];
+				
+				// Arm Joint Values
+				for(int i = 0;i < 7;i++) {
+					q_pos[i+1] = data.position[i];
+					q_name[i+1] = data.name[i];
+					q_vel[i+1] = data.velocity[i];
+					q_eff[i+1] = data.effort[i];
+				}
+				
+		}

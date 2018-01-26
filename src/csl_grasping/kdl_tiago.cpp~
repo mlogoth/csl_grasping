@@ -1,0 +1,140 @@
+// Std C++ headers
+#include <string>
+#include <vector>
+#include <iostream>
+#include <Eigen/Dense>
+
+#include "sensor_msgs/JointState.h"
+
+#include <kdl/frames_io.hpp>
+#include <ms1_grasping/kdl_tiago.h>
+
+TiagoKinematics::TiagoKinematics (ros::NodeHandle n_,  std::string base_link, std::string tip_link)
+{
+			
+			// Node Handler
+			nhd = n_;
+
+			if (!kdl_parser::treeFromParam( "robot_description", my_tree)){
+				ROS_ERROR("Failed to construct kdl tree");
+				}
+
+			//get chain 
+			my_tree.getChain(base_link,tip_link,chain);
+			
+			int jnr = chain.getNrOfJoints();
+			std::cout<<"Initialize Tiago Kinematics Class:\n"<<"> Number of Joints: "<<jnr<<std::endl;
+			std::cout<<"Number of Links: "<<chain.getNrOfSegments()<<std::endl;
+			std::cout<<"Segments: "<<std::endl;
+			for (unsigned int i=0 ; i<chain.getNrOfSegments(); i++){
+				std::cout<< "* " <<chain.getSegment(i).getName()<<std::endl;
+			}
+			
+}
+
+TiagoKinematics::TiagoKinematics (ros::NodeHandle n_, std::string urdf_path,  std::string base_link, std::string tip_link)
+{
+			
+			// Node Handler
+			nhd = n_;
+			
+			//read urdf file link tree
+			
+			if (!kdl_parser::treeFromFile( urdf_path, my_tree)){
+				ROS_ERROR("Failed to construct kdl tree");
+				}
+
+			//get chain 
+			my_tree.getChain(base_link,tip_link,chain);
+			
+			int jnr = chain.getNrOfJoints();
+			std::cout<<"Initialize Tiago Kinematics Class:\n"<<"> Number of Joints: "<<jnr<<std::endl;
+			std::cout<<"Number of Links: "<<chain.getNrOfSegments()<<std::endl;
+			std::cout<<"Segments: "<<std::endl;
+			for (unsigned int i=0 ; i<chain.getNrOfSegments(); i++){
+				std::cout<< "* " <<chain.getSegment(i).getName()<<std::endl;
+			}
+			
+
+}
+
+// Return Pose of End Effector Frame
+KDL::Frame TiagoKinematics::fkSolver(std::vector<double> q_pos) 
+{
+				//std::cout << "\nForward kinematics solver....." << std::endl;
+				
+				//vector of double to joint array
+				KDL::JntArray q(q_pos.size());
+				q = toKDLJntArray(q_pos);
+				
+				KDL::Frame ee_pos;
+				KDL::ChainFkSolverPos_recursive fksolver(chain);
+				bool kinematics_status = fksolver.JntToCart(q, ee_pos);
+				
+				if(kinematics_status >= 0) {
+					//std::cout << ee_pos <<std::endl;
+					//printf("%s \n","Succes Fk!");
+					// Return End Effector Position Rotation
+					return ee_pos;
+				}
+				
+				else{
+					printf("%s \n","Error: could not calculate forward kinematics ");
+					return ee_pos;
+				}
+}
+
+
+
+//Compute Jacobian MAtrix
+Eigen::Matrix<double, 6, Eigen::Dynamic> TiagoKinematics::Jac(std::vector<double> q_pos)
+{
+				std::cout << "\nJacobian Solver....." << std::endl;
+				
+				KDL::ChainJntToJacSolver *jnt_to_jac_solver_(new KDL::ChainJntToJacSolver(chain));
+				KDL::Jacobian J_( q_pos.size() );
+				
+				//vector of double to joint array
+				KDL::JntArray q(q_pos.size());
+				q = toKDLJntArray(q_pos);
+				
+				// computing Jacobian J(q)
+				jnt_to_jac_solver_->JntToJac(q,J_);
+				
+				// Get the Jacobian in Eigen Matrix class
+				Eigen::Matrix<double, 6, Eigen::Dynamic> EigenJacob;
+				
+				EigenJacob.resize(6,q_pos.size());
+				
+				EigenJacob = J_.data;
+				//std::cout << "\n Jacobian: \n" << EigenJacob << std::endl;
+				return EigenJacob;
+}
+
+
+// vector of doubles to JntArray type
+KDL::JntArray TiagoKinematics::toKDLJntArray(const std::vector<double>& vec)
+{
+			KDL::JntArray to_ret(vec.size());
+			for (size_t i=0; i < vec.size(); i++)
+			{
+				to_ret(i) = vec[i];
+			}
+			return to_ret;
+}
+
+
+
+// Joint Array to Std Vector of doubles
+std::vector<double> TiagoKinematics::toStdVec(const KDL::JntArray& arr)
+{
+		std::vector<double> vec(arr.rows());
+		
+		
+		for (size_t i=0; i < vec.size(); i++)
+		{
+			vec[i] = arr(i);
+		}
+		return vec;
+}
+
