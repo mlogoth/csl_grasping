@@ -24,7 +24,7 @@ find_package(cmake_modules REQUIRED)
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
 find_package (LAPACK REQUIRED)
-find_package( PCL REQUIRED )
+find_package( PCL 1.8 EXACT REQUIRED )
 find_package(Eigen REQUIRED)
 find_package(eigen_conversions REQUIRED)
 ## Uncomment this if the package has a setup.py. This macro ensures
