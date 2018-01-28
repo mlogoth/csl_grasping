@@ -1,0 +1,10 @@
+grasping:
+    object:
+        point_cloud_topic: /nothing/points
+        pose_topic: /nothing/pose
+    kinect_frame: /kinect_rgb_frame
+    gripper:
+        height: 0.03
+        length: 0.03
+        open: 0.06
+    loops: 30

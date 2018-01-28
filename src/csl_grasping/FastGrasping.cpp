@@ -57,9 +57,12 @@ FastGrasp::FastGrasp(ros::NodeHandle n_){
 		ROS_INFO("   3) Gripper MAX OPEN: %3.2f", mask_length);
 		ROS_INFO(" Searching Loops: %d", loops);
 		
+		
+		cout<< "Intialize Subscribers"<<endl;
 		// Subscribe To Point Cloud Topic
 		sub_pc = nhd.subscribe(topic_cloud_name, 200, &FastGrasp::getCloud, this);
 		
+		cout<< "Intialize Subscribers 2"<<endl;
 		// Subscribe to Object Pose Topic
 		sub_obj = nhd.subscribe(topic_pose_name, 200, &FastGrasp::getPose, this);
 		
@@ -73,16 +76,21 @@ FastGrasp::FastGrasp(ros::NodeHandle n_){
 		Ident =  MatrixXd::Identity(3, 3);
 		Sk2 = v_skew = Rot_z = MatrixXd::Identity(3, 3);
 		tf::Vector3 z_axis(0.0, 0.0, 1.0);
+	    cout<< "Intializion OK"<<endl;
 }
 
 
-void FastGrasp::getCloud(const sensor_msgs::PointCloud2& input)
+void FastGrasp::getCloud(const sensor_msgs::PointCloud2 input)
 {
 		// Define CallBack Variables
 		pcl::PCLPointCloud2 pcl_pc;
-
+		
+		cout << "Just Subscribed to Point Cloud topic"<<endl;
+        
+        cout << "Convert Input PointCloud2 to pclXYZ"<<endl;
 		// covert sensor_msgs::PointCloud2 to pcl::PointCloud<pcl::pclXYZ>
 		pcl_conversions::toPCL(input, pcl_pc);
+		cout << "Transformation"<<endl;
 		pcl::fromPCLPointCloud2(pcl_pc, *source_cloud);
 
 		cout<<">> Read Object Point Cloud..."<<endl;
@@ -91,7 +99,7 @@ void FastGrasp::getCloud(const sensor_msgs::PointCloud2& input)
 
 
 
-void FastGrasp::getPose(const geometry_msgs::PoseStamped& pose_stamped)
+void FastGrasp::getPose(const geometry_msgs::PoseStamped pose_stamped)
 {
 		//Convert Pose to Eigen::Affine3d
 		geometry_msgs::Pose pp;
@@ -161,26 +169,35 @@ PointCloudsCentroid FastGrasp::GetConhullContour(){
 		// Create A pointer of the source point cloud 
 		/* Not Needed */
 		//m_ptrCloud = source_cloud;
-		
+		cout<< "GET CONCAVE HULL CONTOUR" <<endl;
 		// Transform Point Cloud To object Local Frame
-		pcl::transformPointCloud (*source_cloud, *m_ptrCloud, obj_transformation);
-
+		//pcl::transformPointCloud (*source_cloud, *m_ptrCloud, obj_transformation);
+		
+		cout<< "Input cloud Transformed to its frmae" <<endl;
+		
+		cout<< "cloud Size: " <<source_cloud->points.size()<<endl;
+		cout<< "cloud Size: " <<m_ptrCloud->points.size()<<endl;
 		/* If the cloud is not Empty Begin The Computation */
 		if (m_ptrCloud->points.size() > 0.0) 
 		{
 
 			pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
 			pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-
+			
+		    cout<< "Begin Computations..." <<endl;
+			
 			//Compute Max And Min Values of the Source PCL
 			pcl::getMinMax3D(*m_ptrCloud, src_min, src_max);
-
+			
+			cout<< "Filter in Y Axis..." <<endl;
 			//Apply filter in y Axis (The filter depends on Gripper Length)
 			FastGrasp::filterPass(m_ptrCloud, *cloud_filtered, "y", src_min.y, src_min.y + gripper_length + 0.02);
-
+			
+			cout<< "PLANE segmentation of the cloud..." <<endl;
 			// Create a PLANE segmentation of the cloud
 			FastGrasp::Segmentation(cloud_filtered, coefficients, inliers, 0.02, "PLANE");
-
+			
+			cout<< "Project Cloud to the computed PLANE..." <<endl;
 			// Project the model inliers to the computed Plane
 			proj.setModelType(pcl::SACMODEL_PLANE);
 			proj.setIndices(inliers);
@@ -188,12 +205,14 @@ PointCloudsCentroid FastGrasp::GetConhullContour(){
 			proj.setModelCoefficients(coefficients);
 			proj.filter(*cloud_projected);
 
+			cout<< "Create Concave Hull of the PROJECTED CLOUD..." <<endl;
 			// Create a Concave Hull representation of the projected inliers
 			//chull1.setInputCloud(cloud_filtered); //Without Projection
 			chull.setInputCloud(cloud_projected);
 			chull.setAlpha(0.03);
 			chull.reconstruct(*cloud_hull);
 		
+			cout<< "Filter in X Axis..." <<endl;
 			//Apply Filter in X Axis
 			//Filters the UN-Graspable Points (MAX GRIPPER OPENING)
 			FastGrasp::filterPass(cloud_hull, *cloud_hull, "x", -mask_length/2.0, mask_length/2.0);

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <!-- Load Parameters Yaml File -->
+  <rosparam command="load" file="$(find csl_grasping)/config/summit_kinect_test.yaml" />
+  
+  <!--  tabletop Detection -->
+  <node name="tabletop_object_detection" pkg="object_recognition_core" type="detection" args="-c $(find object_recognition_tabletop)/conf/summit_kinect.detection.object.ros.ork" output="screen"/>
+  
+  <!-- Script to publish the detected object pose and points -->
+  <node name="detected_object_publisher" pkg="csl_grasping" type="obj_ork_publisher.py" output="screen"/>
+  
+  <!-- Grasping Selection Algorithm -->
+<!--  <node name="grasping_selection" pkg="csl_grasping" type="test_algorithm" output="screen"/>-->
+  
+</launch>

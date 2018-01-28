@@ -140,12 +140,12 @@ public:
 	/*
 	* CallBack Function Reads Object Point Cloud
 	*/
-	void getCloud(const sensor_msgs::PointCloud2& input);
+	void getCloud(const sensor_msgs::PointCloud2 input);
 
 	/*
 	* CallBack Function Reads Object Pose
 	*/
-	void getPose(const geometry_msgs::PoseStamped& pose_stamped);
+	void getPose(const geometry_msgs::PoseStamped pose_stamped);
 
 	/*
 	* Filter Pass 

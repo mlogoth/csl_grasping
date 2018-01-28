@@ -12,7 +12,8 @@
 #include <typeinfo>
 
 #include <eigen_conversions/eigen_msg.h>
- #include <tf_conversions/tf_eigen.h>
+#include <tf_conversions/tf_eigen.h>
+
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/Pose.h"
 #include "sensor_msgs/PointCloud2.h"
